@@ -1,5 +1,7 @@
 import os
 import json
+import hashlib
+from db import insert_receipt, list_receipts, total_expense
 from datetime import datetime
 from flask import Flask, request, render_template_string, redirect, url_for, flash
 
@@ -20,6 +22,9 @@ def send_to_azure_mock(image_path: str) -> dict:
 
     response["created_at"] = datetime.now().isoformat(timespec="seconds")
     response["source_image"] = os.path.basename(image_path)
+        # dedup_key：用 merchant+date+total 做重複掃描判斷（像載具）
+    raw = f"{response.get('merchant','')}-{response.get('date','')}-{response.get('total','')}"
+    response["dedup_key"] = hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     print("☁️ (Web) 已收到 Azure 回傳結果（mock）")
     return response
@@ -56,19 +61,28 @@ INDEX_HTML = """
 
     <div class="card">
       <h3>1) 上傳收據圖片</h3>
-      <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+      <form action="/upload" method="post" enctype="multipart/form-data">
         <input type="file" name="receipt" accept="image/*" required />
         <div style="margin-top: 12px;">
           <button class="btn btn-primary" type="submit">Upload & Process</button>
-          <a class="btn btn-secondary" href="{{ url_for('view_data') }}" style="text-decoration:none;">View result.json</a>
+          <a class="btn btn-secondary" href="/data" style="text-decoration:none;">View result.json</a>
         </div>
       </form>
     </div>
 
     <div class="card">
-      <h3>2) 查詢總支出</h3>
-      <a class="btn btn-primary" href="{{ url_for('total') }}" style="text-decoration:none;">Calculate Total</a>
-    </div>
+  <h3>2) 查詢總支出</h3>
+
+  <a class="btn btn-primary" href="/total">
+    Calculate Total
+  </a>
+
+  <br><br>
+
+  <a class="btn btn-secondary" href="/receipts">
+    View Receipts (Database)
+  </a>
+</div>
 
     <p class="muted">Tips：你可以在 GitHub README 放上操作截圖或錄影，面試超加分。</p>
   </body>
@@ -119,8 +133,15 @@ def upload():
     # 模擬呼叫雲端辨識 → 取得結構化結果
     result = send_to_azure_mock(save_path)
 
-    # 累加 + 去重（你前面做好的）
-    append_to_json_list(result)
+    # 確保 totle 是數字
+    result["totle"] = float(result.get("totle", 0))
+
+    inserted = insert_receipt(result)
+
+    if not inserted:
+        flash("⚠️ 這筆收據已經存過了(dedup)")
+    else:
+        flash("✅ 已寫入 SQLite(receipts.db)")    
 
     pretty = json.dumps(result, ensure_ascii=False, indent=4)
     return render_template_string(RESULT_HTML, pretty=pretty)
@@ -128,12 +149,7 @@ def upload():
 
 @app.get("/data")
 def view_data():
-    if not os.path.exists("result.json"):
-        return "result.json not found. Please upload a receipt first.", 404
-
-    with open("result.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-
+    data = list_receipts()
     return app.response_class(
         response=json.dumps(data, ensure_ascii=False, indent=4),
         status=200,
@@ -141,19 +157,62 @@ def view_data():
     )
 
 
+@app.get("/receipts")
+def view_receipts():
+    data = list_receipts()
+
+    html = """
+    <h2>📋 All Receipts</h2>
+    <a href="/">← Back to Home</a>
+    <hr>
+    """
+
+    for r in data:
+        html += f"""
+        <p>
+        🏪 {r['merchant']} <br>
+        📅 {r['date']} <br>
+        💰 {r['total']}
+        </p>
+        <hr>
+        """
+
+    return html
+
+
+@app.get("/receipts")
+def receipts_page():
+    data = list_receipts()
+    html = """
+    <h2>All Receipts</h2>
+    <table border="1" cellpadding="8">
+        <tr>
+            <th>Merchant</th>
+            <th>Date</th>
+            <th>Total</th>
+            <th>Created At</th>
+        </tr>
+    """
+    for r in data:
+        html += f"""
+        <tr>
+            <td>{r['merchant']}</td>
+            <td>{r['date']}</td>
+            <td>{r['total']}</td>
+            <td>{r['created_at']}</td>
+        </tr>
+        """
+    html += "</table><br><a href='/'>Back</a>"
+    return html
+
 @app.get("/total")
 def total():
-    if not os.path.exists("result.json"):
-        flash("目前還沒有資料，請先上傳一張收據")
-        return redirect(url_for("index"))
-
-    with open("result.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    total_amount = sum(item.get("total", 0) for item in data)
-    flash(f"💰 目前總支出金額為：{total_amount}")
-    return redirect(url_for("index"))
-
+    s = total_expense()
+    return f"""
+    <h2>💰 Total Expense</h2>
+    <p>{s}</p>
+    <a href="/">Back to Home</a>
+    """
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

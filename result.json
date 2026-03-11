@@ -3,20 +3,8 @@
         "merchant": "芳塢碼頭食品行",
         "date": "2026-02-25",
         "total": 140.0,
-        "created_at": "2026-03-02T02:16:37"
-    },
-    {
-        "merchant": "芳塢碼頭食品行",
-        "date": "2026-02-25",
-        "total": 140.0,
-        "created_at": "2026-03-02T09:28:55",
-        "source_image": "receipt.jpg"
-    },
-    {
-        "merchant": "芳塢碼頭食品行",
-        "date": "2026-02-25",
-        "total": 140.0,
-        "created_at": "2026-03-02T09:29:10",
-        "source_image": "receipt.jpg"
+        "created_at": "2026-03-02T16:55:46",
+        "source_image": "receipt.jpg",
+        "dedup_key": "6d08b70ca8b68b6b6bc6a36bd1e646a1938331c533d050e727053f7e58897f88"
     }
 ]

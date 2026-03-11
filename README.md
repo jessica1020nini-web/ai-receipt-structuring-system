@@ -1,5 +1,7 @@
 # AI Receipt Data Structuring System
 
+A web-based demo system that simulates Azure Document Intelligence to structure receipt data and store it in SQLite.
+
 ## 📌 Project Overview
 This project simulates an Azure Document Intelligence workflow.
 It converts unstructured receipt data (image-based receipt) into structured JSON format.
@@ -66,3 +68,65 @@ This will calculate the total expense from all stored receipts.
         "2026-03-02T02:16:37"
   }
 ]
+```
+
+## Features
+
+- Upload receipt image
+- Mock Azure API processing
+- Structured JSON result
+- SQLite database storage
+- Deduplication using SHA256 hash
+- View all receipts
+- Calculate total expense
+
+## Tech Stack
+
+- Python
+- Flask
+- SQLite
+- HTML (render_template_string)
+
+
+## Key Design Decisions
+
+- Used SQLite for lightweight local database
+- Used UNIQUE constraint on dedup_key to prevent duplicate records
+- Used SHA256 hash to generate unique fingerprint for each receipt
+
+## 🗄 Database Schema
+```sql
+CREATE TABLE receipts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    merchant TEXT,
+    date TEXT,
+    total REAL,
+    created_at TEXT,
+    dedup_key TEXT UNIQUE
+);
+```
+
+This schema ensures:
+	-	Each receipt has a unique identifier
+	-	dedup_key prevents duplicate inserts
+	-	Fast aggregation queries on total expense
+
+
+## 🔐 Deduplication Strategy
+
+Each receipt generates a SHA256 hash:
+
+```python
+dedup_key = sha256(raw_receipt_data)
+```
+
+This ensures:
+	-	Identical receipts cannot be inserted twice
+	-	Database integrity is preserved
+	-	No manual duplicate checking is needed
+
+## 📦 Future Improvements
+	-	Replace mock Azure API with real Azure Document Intelligence
+	-	Add REST API endpoints (JSON response instead of HTML)
+	-	Add pagination for large receipt datasets
+	-	Deploy to cloud (Render / Azure Web App)
